@@ -1,0 +1,542 @@
+<html>
+
+<head>
+    <style>
+        
+        
+.dropbtn {
+  background-color: #3498DB;
+  color: white;
+  padding: 16px;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+}
+
+.dropbtn:hover, .dropbtn:focus {
+  background-color: #2980B9;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  overflow: auto;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+
+.dropdown-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+.dropdown a:hover {background-color: #ddd;}
+
+.show {display: block;}
+    
+    .bar {
+            fill: steelblue;
+        }
+
+    
+
+    svg rect {
+        fill: orange;
+    }
+
+    svg text {
+        fill:white;
+        font: 10px sans-serif;
+        text-anchor: end;
+    }
+
+
+
+    </style>
+</head>
+
+<body>
+        <div class="dropdown">
+                <button onclick="myFunction()" class="dropbtn">Dropdown</button>
+                <div id="myDropdown" class="dropdown-content">
+                  <a href="./index.html">confirmed</a>
+                  <a href="./death.html">Death</a>
+                  <a href="./recovered.html">Recovered</a>
+                </div>
+        </div>
+     <div id="container">
+            <form id="my_radio_box">
+                <input type="radio" id="o1" name="my_options" value="option 1"> May
+                <input type="radio" id="o2" name="my_options" value="option 2"> April
+                <input type="radio" id="o3" name="my_options" value="option 3"> March
+                <input type="radio" id="o4" name="my_options" value="option 3"> February
+                <input type="radio" id="o5" name="my_options" value="option 3"> January
+            </form>
+        </div>
+        
+    <svg id="container" height="500" width="700">
+        <g id="body" transform="translate(0,0)"></g>
+    </svg>
+</body>
+<script src="d3.js"></script>
+<script>
+    function myFunction() {
+  document.getElementById("myDropdown").classList.toggle("show");
+}
+
+// Close the dropdown if the user clicks outside of it
+window.onclick = function(event) {
+  if (!event.target.matches('.dropbtn')) {
+    var dropdowns = document.getElementsByClassName("dropdown-content");
+    var i;
+    for (i = 0; i < dropdowns.length; i++) {
+      var openDropdown = dropdowns[i];
+      if (openDropdown.classList.contains('show')) {
+        openDropdown.classList.remove('show');
+      }
+    }
+  }
+}
+    
+    // Change magnitude to population
+    Promise.all([
+        d3.csv("deaths.csv"),
+        d3.json("countries.geo.json")
+    ]).then(showData)
+
+
+    function showData(data_and_map) {
+        d3.select("#o1").on("click",function() {
+            d3.select("svg").remove()
+            d3.select("body").append("svg").attr("id","cont").attr("height",700).attr("width",700).style("border","1px solid black")
+            d3.select("svg").append("g").attr("id","body")
+
+
+
+            var body = d3.select("#body")
+            var data = data_and_map[0]
+            var map_data = data_and_map[1]
+            
+
+            var dict1 = {};
+            for (var c = 0; c<data.length;c++) {
+                var country = data[c].Country
+                // console.log(country)
+                dict1[country] = parseInt(data[c].May);
+            }
+            // console.log(dict1)
+            map_data.features = map_data.features.map(d => {
+                var country_name = d.properties.name;
+                var population = dict1[country_name];
+                d.properties.population = population;
+                console.log(d.properties)
+                return d;
+            })
+            var max_population = d3.max(map_data.features, 
+                d => d.properties.population);
+            // console.log(max_population)
+
+            var median_population = d3.median(map_data.features, 
+                d => d.properties.population);
+            console.log(median_population)
+            var fourth_pop=(median_population+max_population)/2
+            var second_pop=(median_population)/2
+            var cScale = d3.scaleLinear()
+                .domain([0,second_pop, median_population, fourth_pop, max_population])
+                .range(["white","#CCFFFF", "#0abab5","black" ,"#2B3856"])
+            var bodyHeight = 600
+            var bodyWidth = 600
+
+            var projection = 
+                d3.geoNaturalEarth1()
+                    .scale(100)
+                    .translate([bodyWidth / 2, bodyHeight / 2])
+
+
+            var path = d3.geoPath()
+                .projection(projection);
+
+            body.selectAll("path").data(map_data.features)
+                .enter().append("path")
+                .attr("d", d => path(d))
+                .attr("stroke", "black")
+                .attr("fill",
+                        d=>d.properties.population ? cScale(d.properties.population): "Pink")
+                .on("mouseover", function(d){
+                    tooltip.style("visibility", "visible").text(d.properties.name + ": " + d.properties.population).style("color","black").style("background-color", "#ffdf00");
+                    if (d.properties.population >  median_population) {
+                            return this.style.fill = "orange";
+                    }
+                    else{
+                            return this.style.fill = "yellow";
+                    }
+                })
+                .on("mousemove", function(d){
+                    d3.select(this).style("color", "red");
+                    tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px").text(d.properties.name + ": " + d.properties.population);
+            
+                })
+                .on("mouseout", function(d){
+                    tooltip.style("visibility", "hidden");
+                    return this.style.fill=d.properties.population ?  cScale(d.properties.population):"White";
+                }); 
+
+
+            var tooltip = d3.select("body")
+                            .append("div")
+                            .style("position", "absolute")
+                            .style("font-family", "'Open Sans', sans-serif")
+                            .style("font-size", "5px")
+                            .style("z-index", "10")
+                            .style("visibility", "hidden");
+        })
+
+        d3.select("#o2").on("click",function() {
+            d3.select("svg").remove()
+            d3.select("body").append("svg").attr("id","cont").attr("height",700).attr("width",700).style("border","1px solid black")
+            d3.select("svg").append("g").attr("id","body")
+
+
+
+            var body = d3.select("#body")
+            var data = data_and_map[0]
+            var map_data = data_and_map[1]
+            
+
+            var dict1 = {};
+            for (var c = 0; c<data.length;c++) {
+                var country = data[c].Country
+                // console.log(country)
+                dict1[country] = parseInt(data[c].April);
+            }
+            // console.log(dict1)
+            map_data.features = map_data.features.map(d => {
+                var country_name = d.properties.name;
+                var population = dict1[country_name];
+                d.properties.population = population;
+                console.log(d.properties)
+                return d;
+            })
+            var max_population = d3.max(map_data.features, 
+                d => d.properties.population);
+            // console.log(max_population)
+
+            var median_population = d3.median(map_data.features, 
+                d => d.properties.population);
+            console.log(median_population)
+            var cScale = d3.scaleLinear()
+                .domain([0, median_population, max_population])
+                .range(["white", "cyan" ,"blue"])
+            var bodyHeight = 600
+            var bodyWidth = 600
+
+            var projection = 
+                d3.geoNaturalEarth1()
+                    .scale(100)
+                    .translate([bodyWidth / 2, bodyHeight / 2])
+
+
+            var path = d3.geoPath()
+                .projection(projection);
+
+            body.selectAll("path").data(map_data.features)
+                .enter().append("path")
+                .attr("d", d => path(d))
+                .attr("stroke", "black")
+                .attr("fill",
+                        d=>d.properties.population ? cScale(d.properties.population): "Pink")
+                .on("mouseover", function(d){
+                    tooltip.style("visibility", "visible").text(d.properties.name + ": " + d.properties.population).style("color","black").style("background-color", "yellow");
+                    if (d.properties.population >  median_population) {
+                            return this.style.fill = "orange";
+                    }
+                    else{
+                            return this.style.fill = "yellow";
+                    }
+                })
+                .on("mousemove", function(d){
+                    d3.select(this).style("color", "red");
+                    tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px").text(d.properties.name + ": " + d.properties.population);
+            
+                })
+                .on("mouseout", function(d){
+                    tooltip.style("visibility", "hidden");
+                    return this.style.fill=d.properties.population ?  cScale(d.properties.population):"White";
+                }); 
+
+
+            var tooltip = d3.select("body")
+                            .append("div")
+                            .style("position", "absolute")
+                            .style("font-family", "'Open Sans', sans-serif")
+                            .style("font-size", "5px")
+                            .style("z-index", "10")
+                            .style("visibility", "hidden");
+        })
+        
+        d3.select("#o3").on("click",function() {
+            d3.select("svg").remove()
+            d3.select("body").append("svg").attr("id","cont").attr("height",700).attr("width",700).style("border","1px solid black")
+            d3.select("svg").append("g").attr("id","body")
+
+
+
+            var body = d3.select("#body")
+            var data = data_and_map[0]
+            var map_data = data_and_map[1]
+            
+
+            var dict1 = {};
+            for (var c = 0; c<data.length;c++) {
+                var country = data[c].Country
+                // console.log(country)
+                dict1[country] = parseInt(data[c].March);
+            }
+            // console.log(dict1)
+            map_data.features = map_data.features.map(d => {
+                var country_name = d.properties.name;
+                var population = dict1[country_name];
+                d.properties.population = population;
+                console.log(d.properties)
+                return d;
+            })
+            var max_population = d3.max(map_data.features, 
+                d => d.properties.population);
+            // console.log(max_population)
+
+            var median_population = d3.median(map_data.features, 
+                d => d.properties.population);
+            console.log(median_population)
+            var cScale = d3.scaleLinear()
+                .domain([0, median_population, max_population])
+                .range(["white", "cyan" ,"blue"])
+            var bodyHeight = 600
+            var bodyWidth = 600
+
+            var projection = 
+                d3.geoNaturalEarth1()
+                    .scale(100)
+                    .translate([bodyWidth / 2, bodyHeight / 2])
+
+
+            var path = d3.geoPath()
+                .projection(projection);
+
+            body.selectAll("path").data(map_data.features)
+                .enter().append("path")
+                .attr("d", d => path(d))
+                .attr("stroke", "black")
+                .attr("fill",
+                        d=>d.properties.population ? cScale(d.properties.population): "Pink")
+                .on("mouseover", function(d){
+                    tooltip.style("visibility", "visible").text(d.properties.name + ": " + d.properties.population).style("color","black").style("background-color", "yellow");
+                    if (d.properties.population >  median_population) {
+                            return this.style.fill = "orange";
+                    }
+                    else{
+                            return this.style.fill = "yellow";
+                    }
+                })
+                .on("mousemove", function(d){
+                    d3.select(this).style("color", "red");
+                    tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px").text(d.properties.name + ": " + d.properties.population);
+            
+                })
+                .on("mouseout", function(d){
+                    tooltip.style("visibility", "hidden");
+                    return this.style.fill=d.properties.population ?  cScale(d.properties.population):"White";
+                }); 
+
+
+            var tooltip = d3.select("body")
+                            .append("div")
+                            .style("position", "absolute")
+                            .style("font-family", "'Open Sans', sans-serif")
+                            .style("font-size", "5px")
+                            .style("z-index", "10")
+                            .style("visibility", "hidden");
+        })
+
+        d3.select("#o4").on("click",function() {
+            d3.select("svg").remove()
+            d3.select("body").append("svg").attr("id","cont").attr("height",700).attr("width",700).style("border","1px solid black")
+            d3.select("svg").append("g").attr("id","body")
+
+
+
+            var body = d3.select("#body")
+            var data = data_and_map[0]
+            var map_data = data_and_map[1]
+            
+
+            var dict1 = {};
+            for (var c = 0; c<data.length;c++) {
+                var country = data[c].Country
+                // console.log(country)
+                dict1[country] = parseInt(data[c].February);
+            }
+            // console.log(dict1)
+            map_data.features = map_data.features.map(d => {
+                var country_name = d.properties.name;
+                var population = dict1[country_name];
+                d.properties.population = population;
+                console.log(d.properties)
+                return d;
+            })
+            var max_population = d3.max(map_data.features, 
+                d => d.properties.population);
+            // console.log(max_population)
+
+            var median_population = d3.median(map_data.features, 
+                d => d.properties.population);
+            console.log(median_population)
+            var cScale = d3.scaleLinear()
+                .domain([0, median_population, max_population])
+                .range(["white", "cyan" ,"blue"])
+            var bodyHeight = 600
+            var bodyWidth = 600
+
+            var projection = 
+                d3.geoNaturalEarth1()
+                    .scale(100)
+                    .translate([bodyWidth / 2, bodyHeight / 2])
+
+
+            var path = d3.geoPath()
+                .projection(projection);
+
+            body.selectAll("path").data(map_data.features)
+                .enter().append("path")
+                .attr("d", d => path(d))
+                .attr("stroke", "black")
+                .attr("fill",
+                        d=>d.properties.population ? cScale(d.properties.population): "Pink")
+                .on("mouseover", function(d){
+                    tooltip.style("visibility", "visible").text(d.properties.name + ": " + d.properties.population).style("color","black").style("background-color", "yellow");
+                    if (d.properties.population >  median_population) {
+                            return this.style.fill = "orange";
+                    }
+                    else{
+                            return this.style.fill = "yellow";
+                    }
+                })
+                .on("mousemove", function(d){
+                    d3.select(this).style("color", "red");
+                    tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px").text(d.properties.name + ": " + d.properties.population);
+            
+                })
+                .on("mouseout", function(d){
+                    tooltip.style("visibility", "hidden");
+                    return this.style.fill=d.properties.population ?  cScale(d.properties.population):"White";
+                }); 
+
+
+            var tooltip = d3.select("body")
+                            .append("div")
+                            .style("position", "absolute")
+                            .style("font-family", "'Open Sans', sans-serif")
+                            .style("font-size", "5px")
+                            .style("z-index", "10")
+                            .style("visibility", "hidden");
+        })
+
+        d3.select("#o5").on("click",function() {
+            d3.select("svg").remove()
+            d3.select("body").append("svg").attr("id","cont").attr("height",700).attr("width",700).style("border","1px solid black")
+            d3.select("svg").append("g").attr("id","body")
+
+
+
+            var body = d3.select("#body")
+            var data = data_and_map[0]
+            var map_data = data_and_map[1]
+            
+
+            var dict1 = {};
+            for (var c = 0; c<data.length;c++) {
+                var country = data[c].Country
+                // console.log(country)
+                dict1[country] = parseInt(data[c].January);
+            }
+            // console.log(dict1)
+            map_data.features = map_data.features.map(d => {
+                var country_name = d.properties.name;
+                var population = dict1[country_name];
+                d.properties.population = population;
+                console.log(d.properties)
+                return d;
+            })
+            var max_population = d3.max(map_data.features, 
+                d => d.properties.population);
+            // console.log(max_population)
+
+            var median_population = d3.median(map_data.features, 
+                d => d.properties.population);
+            console.log(median_population)
+            var cScale = d3.scaleLinear()
+                .domain([0, median_population, max_population])
+                .range(["white", "cyan" ,"blue"])
+            var bodyHeight = 600
+            var bodyWidth = 600
+
+            var projection = 
+                d3.geoNaturalEarth1()
+                    .scale(100)
+                    .translate([bodyWidth / 2, bodyHeight / 2])
+
+
+            var path = d3.geoPath()
+                .projection(projection);
+
+            body.selectAll("path").data(map_data.features)
+                .enter().append("path")
+                .attr("d", d => path(d))
+                .attr("stroke", "black")
+                .attr("fill",
+                        d=>d.properties.population ? cScale(d.properties.population): "Pink")
+                .on("mouseover", function(d){
+                    tooltip.style("visibility", "visible").text(d.properties.name + ": " + d.properties.population).style("color","black").style("background-color", "yellow");
+                    if (d.properties.population >  median_population) {
+                            return this.style.fill = "orange";
+                    }
+                    else{
+                            return this.style.fill = "yellow";
+                    }
+                })
+                .on("mousemove", function(d){
+                    d3.select(this).style("color", "red");
+                    tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px").text(d.properties.name + ": " + d.properties.population);
+            
+                })
+                .on("mouseout", function(d){
+                    tooltip.style("visibility", "hidden");
+                    return this.style.fill=d.properties.population ?  cScale(d.properties.population):"Pink";
+                }); 
+
+
+            var tooltip = d3.select("body")
+                            .append("div")
+                            .style("position", "absolute")
+                            .style("font-family", "'Open Sans', sans-serif")
+                            .style("font-size", "5px")
+                            .style("z-index", "10")
+                            .style("visibility", "hidden");
+        })
+
+
+
+
+    }
+
+</script>
+
+</html>
